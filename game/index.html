@@ -73,7 +73,8 @@ const SFX = {
   caught(){ beep(170,0.5,'sawtooth',0.12,38); beep(85,0.6,'triangle',0.1,30,0.05); },
   unlock(){ beep(440,0.1,'sine',0.07,660); beep(660,0.14,'sine',0.07,880,0.09); },
   win(){ [523,659,784,1046].forEach((f,i)=>beep(f,0.2,'sine',0.08,null,i*0.11)); },
-  step(){ beep(90+Math.random()*30,0.05,'triangle',0.02); }
+  step(){ beep(90+Math.random()*30,0.05,'triangle',0.02); },
+  gstep(gain){ beep(70+Math.random()*20,0.06,'triangle',gain); }   // guard footstep, gain by distance
 };
 
 // ---------------- 3. INPUT ----------------
@@ -238,7 +239,7 @@ function makeGuard(def){
   const pts = def.path.map(p=>tileCenter(p[0],p[1]));
   const g = { x:pts[0].x, y:pts[0].y, r:11, angle:0, wp:1, waypoints:pts,
     state:'patrol', meter:0, lastKnown:null, loseTimer:0, searchTimer:0,
-    pathTo:[], repath:0, pauseT:0, lookPhase:Math.random()*TAU, popT:0 };
+    pathTo:[], repath:0, pauseT:0, lookPhase:Math.random()*TAU, popT:0, stepT:Math.random()*0.4 };
   g.angle = Math.atan2(pts[1].y-g.y, pts[1].x-g.x);
   return g;
 }
@@ -299,6 +300,7 @@ function triggerAlarm(src){
 }
 function updateGuard(g, dt){
   g.lookPhase += dt;
+  const prevX = g.x, prevY = g.y;
   const d = seePlayer(g.x,g.y,g.angle,GUARD_RANGE,GUARD_FOV);
   if(d){
     g.meter = Math.min(1, g.meter + detectRate(d,GUARD_RANGE)*dt);
@@ -357,6 +359,15 @@ function updateGuard(g, dt){
     case 'return': {
       if(followPath(g,dt,72)) g.state='patrol';
       break;
+    }
+  }
+  // Footsteps: a moving guard is audible nearby — louder as he closes in.
+  if(g.x!==prevX || g.y!==prevY){
+    g.stepT += dt;
+    if(g.stepT>0.38){
+      g.stepT = 0;
+      const pd2 = dist(g.x,g.y,P.x,P.y);
+      if(pd2<340) SFX.gstep(0.004 + 0.03*(1 - pd2/340));
     }
   }
   // Caught: grabbed at close range.
